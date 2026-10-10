@@ -1,36 +1,51 @@
 "use client";
-import { useReportStore } from "@/store/useReportStore";
-
-// Mock data until we query the Neon DB
-const MOCK_CLIENTS = [
-  { id: "1", name: "Acme Dental" },
-  { id: "2", name: "Summit Real Estate" },
-];
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { CLIENTS } from "@/lib/report-data";
 
 export function ClientSidebar() {
-  const { selectedClient, setClient } = useReportStore();
+  const pathname = usePathname();
 
   return (
     <div className="flex flex-col h-full p-4">
       <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">
+        Reports
+      </h2>
+      <Link
+        href={'/dashboard'}
+        className={`mb-6 block rounded-md px-4 py-2 transition-colors ${
+          pathname === '/dashboard'
+            ? "bg-indigo-50 text-indigo-700 font-medium"
+            : "text-slate-700 hover:bg-slate-100"
+        }`}
+        aria-current={pathname === '/dashboard' ? "page" : undefined}
+      >
+        Overview
+      </Link>
+      <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">
         Active Clients
       </h2>
       <ul className="space-y-2">
-        {MOCK_CLIENTS.map((client) => (
+        {CLIENTS.map((client) => {
+          const href = `/${client.slug}`;
+          const isActive = pathname === href;
+
+          return (
           <li key={client.id}>
-            <button
-              onClick={() => setClient(client.id)}
-              className={`w-full text-left px-4 py-2 rounded-md transition-colors ${
-                selectedClient === client.id
+            <Link
+              href={href}
+              className={`block w-full rounded-md px-4 py-2 transition-colors ${
+                isActive
                   ? "bg-indigo-50 text-indigo-700 font-medium"
                   : "hover:bg-slate-100 text-slate-700"
               }`}
-              aria-current={selectedClient === client.id ? "page" : undefined}
+              aria-current={isActive ? "page" : undefined}
             >
               {client.name}
-            </button>
+            </Link>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </div>
   );
