@@ -1,26 +1,33 @@
 import { create } from 'zustand';
 
+export interface Client {
+    id: string;
+    name: string;
+    metaAdsConnected: boolean;
+}
+
 interface ReportState {
+    clients: Client[];
+    clientsLoaded: boolean;
     selectedClient: string | null;
-    activeMetrics: Record<string, boolean>;
-    setClient: (clientId: string) => void;
-    toggleMetric: (metricId: string) => void;
+    setClient: (clientId: string | null) => void;
+    loadClients: () => Promise<void>;
 }
 
 export const useReportStore = create<ReportState>((set) => ({
+    clients: [],
+    clientsLoaded: false,
     selectedClient: null,
-    activeMetrics: {
-        totalSpend: true,
-        cpa: true,
-        roas: true,
-        clicks: false, // Defaulting secondary metrics to false
-    },
     setClient: (clientId) => set({ selectedClient: clientId }),
-    toggleMetric: (metricId) =>
+    loadClients: async () => {
+        const res = await fetch('/api/clients');
+        if (!res.ok) return;
+        const clients: Client[] = await res.json();
         set((state) => ({
-            activeMetrics: {
-                ...state.activeMetrics,
-                [metricId]: !state.activeMetrics[metricId],
-            },
-        })),
+            clients,
+            clientsLoaded: true,
+            // drop the selection if that client no longer exists
+            selectedClient: clients.some((c) => c.id === state.selectedClient) ? state.selectedClient : null,
+        }));
+    },
 }));
