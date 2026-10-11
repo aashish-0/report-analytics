@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -52,5 +52,27 @@ export const clients = pgTable("clients", {
   name: text("name").notNull(),
   metaAdsConnected: boolean("metaAdsConnected").default(false).notNull(),
   userId: text("userId").notNull().references(() => user.id),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+// Which metrics appear in a client's PDF
+export const reportSettings = pgTable("report_settings", {
+  clientId: text("clientId").primaryKey().references(() => clients.id, { onDelete: "cascade" }),
+  totalSpend: boolean("totalSpend").default(true).notNull(),
+  cpa: boolean("cpa").default(true).notNull(),
+  roas: boolean("roas").default(true).notNull(),
+  linkClicks: boolean("linkClicks").default(false).notNull(),
+  impressions: boolean("impressions").default(false).notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+// One row per generated report; `cards` is the snapshot the PDF is rendered from
+export const reports = pgTable("reports", {
+  id: text("id").primaryKey(),
+  clientId: text("clientId").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  period: text("period").notNull(),
+  agencyName: text("agencyName").notNull(),
+  clientName: text("clientName").notNull(),
+  cards: jsonb("cards").$type<import("./reports/pdf").PdfCard[]>().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

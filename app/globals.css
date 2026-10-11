@@ -24,3 +24,19 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Tailwind v4 resets buttons to the default cursor; restore pointer on clickable items */
+button:not(:disabled),
+a[href],
+label[for],
+summary,
+select,
+input[type="checkbox"],
+input[type="radio"],
+input[type="month"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}

@@ -5,8 +5,9 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Agency Reporting Pipeline",
-  description: "Automated client reporting",
+  title: "ReportPilot — Automated ad reports for agencies",
+  description:
+    "Connect a client's Meta Ads once, pick metrics, and generate a branded monthly PDF report in one click.",
 };
 
 export default function RootLayout({
