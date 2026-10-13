@@ -12,7 +12,9 @@ export function ConnectMetaAdsButton() {
     }
 
     // Initialize Nango with your public key from the .env file
-    const nango = new Nango({ publicKey: process.env.NEXT_PUBLIC_NANGO_KEY! });
+    const nango = new Nango({
+      publicKey: process.env.NEXT_PUBLIC_NANGO_PUBLIC_KEY || 'your_nango_public_key_here'
+    });
 
     try {
       // We explicitly pass selectedClient to Nango to lock the mapping
@@ -25,8 +27,8 @@ export function ConnectMetaAdsButton() {
   };
 
   return (
-    <button 
-      onClick={handleConnect} 
+    <button
+      onClick={handleConnect}
       className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md transition"
     >
       Connect Meta Ads

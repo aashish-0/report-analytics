@@ -1,12 +1,14 @@
 "use client";
+import { useState } from "react";
 import { MetricToggles } from "@/components/MetricToggles";
 import { ConnectMetaAdsButton } from "@/components/ConnectMetaAdsButton";
 import { useReportStore } from "@/store/useReportStore";
+import MetaDashboard from "@/components/MetaDashboard";
 
 export default function DashboardPage() {
   const { selectedClient } = useReportStore();
+  const [showCharts, setShowCharts] = useState(false);
 
-  // This function definition resolves the ts(2304) error
   const handleGenerate = async () => {
     alert("Triggering headless browser to generate PDF...");
   };
@@ -20,17 +22,36 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-4xl space-y-8">
-      <div className="flex justify-between items-start">
+    <div className="max-w-5xl space-y-8 pb-12">
+      {/* Header section with connection triggers */}
+      <div className="flex justify-between items-start border-b border-slate-200 pb-6">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Client Configuration</h2>
-          <p className="text-slate-500 mt-1">Select the metrics to include in the report.</p>
+          <p className="text-slate-500 mt-1">Select metrics and preview live connected ad channels.</p>
         </div>
-        <ConnectMetaAdsButton />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCharts(!showCharts)}
+            className="bg-slate-800 text-white px-4 py-2 rounded-md font-medium text-sm hover:bg-slate-900 transition shadow"
+          >
+            {showCharts ? "Hide Visual Analytics" : "View Graphical Analytics"}
+          </button>
+          <ConnectMetaAdsButton />
+        </div>
       </div>
 
+      {/* Conditionally expand the graphical view when toggled */}
+      {showCharts && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">Meta Ads Visual Performance Payload</h3>
+          <MetaDashboard />
+        </div>
+      )}
+
+      {/* Existing Metric Toggles */}
       <MetricToggles />
 
+      {/* Footer Generation Action */}
       <div className="flex justify-end border-t border-slate-200 pt-6">
         <button
           onClick={handleGenerate}
