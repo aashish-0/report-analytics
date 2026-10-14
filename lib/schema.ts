@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -53,4 +53,13 @@ export const clients = pgTable("clients", {
   metaAdsConnected: boolean("metaAdsConnected").default(false).notNull(),
   userId: text("userId").notNull().references(() => user.id),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export const reportTemplates = pgTable("report_templates", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("userId").notNull().references(() => user.id),
+  clientId: text("clientId").notNull().unique(), 
+  metrics: jsonb("metrics").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull()
 });

@@ -1,37 +1,61 @@
 "use client";
+import { useState } from 'react';
 import Nango from '@nangohq/frontend';
 import { useReportStore } from "@/store/useReportStore";
 
 export function ConnectMetaAdsButton() {
-  const { selectedClient } = useReportStore();
+  // ✨ NEW: Destructure setClient so we can update the active ID
+  const { selectedClient, setClient } = useReportStore();
+  const [isConnected, setIsConnected] = useState(false);
 
   const handleConnect = async () => {
-    if (!selectedClient) {
-      alert("Please select a client from the sidebar first.");
-      return;
-    }
-
-    // Initialize Nango with your public key from the .env file
-    const nango = new Nango({
-      publicKey: process.env.NEXT_PUBLIC_NANGO_PUBLIC_KEY || 'your_nango_public_key_here'
-    });
-
     try {
-      // We explicitly pass selectedClient to Nango to lock the mapping
-      const result = await nango.auth('meta-ads', selectedClient);
-      console.log("Successfully connected Meta Ads for client:", result.connectionId);
-      // Here you would trigger a UI toast notification
+      const res = await fetch('/api/nango/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          integrationId: 'facebook',
+          endUserId: selectedClient
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(JSON.stringify(data.error));
+      }
+
+      const nango = new Nango({ connectSessionToken: data.token });
+
+      // Open the popup and wait for the user to log in
+      const result = await nango.auth('facebook');
+
+      console.log("Successfully connected Meta Ads:", result.connectionId);
+
+      // ✨ NEW: Update your app to use Nango's real connection ID instead of "primary-user"
+      if (result.connectionId) {
+        setClient(result.connectionId);
+      }
+
+      setIsConnected(true);
+      window.dispatchEvent(new Event('refreshMetaAds'));
+
     } catch (error) {
       console.error("Nango connection failed", error);
+      alert("Failed to connect Meta account.");
     }
   };
 
   return (
     <button
       onClick={handleConnect}
-      className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md transition"
+      disabled={isConnected}
+      className={`${isConnected
+          ? "bg-green-600 hover:bg-green-700"
+          : "bg-blue-600 hover:bg-blue-700"
+        } text-white font-medium px-4 py-2 rounded-md transition disabled:opacity-80`}
     >
-      Connect Meta Ads
+      {isConnected ? "Meta Ads Connected ✓" : "Connect Meta Ads"}
     </button>
   );
 }

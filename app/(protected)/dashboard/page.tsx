@@ -1,33 +1,54 @@
 "use client";
 import { useState } from "react";
-import { MetricToggles } from "@/components/MetricToggles";
 import { ConnectMetaAdsButton } from "@/components/ConnectMetaAdsButton";
+import { MetaDashboard } from "@/components/MetaDashboard";
+import { MetricToggles } from "@/components/MetricToggles";
 import { useReportStore } from "@/store/useReportStore";
-import MetaDashboard from "@/components/MetaDashboard";
 
 export default function DashboardPage() {
-  const { selectedClient } = useReportStore();
   const [showCharts, setShowCharts] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const { selectedClient } = useReportStore();
 
   const handleGenerate = async () => {
-    alert("Triggering headless browser to generate PDF...");
-  };
+    if (!selectedClient) {
+      alert("Please connect a Meta Ads account before generating a report.");
+      return;
+    }
 
-  if (!selectedClient) {
-    return (
-      <div className="flex h-full items-center justify-center text-slate-500">
-        <p>Select a client from the sidebar to configure their report.</p>
-      </div>
-    );
-  }
+    setIsGenerating(true);
+    try {
+      const response = await fetch(`/api/reports/generate?clientId=${selectedClient}`);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to generate report");
+      }
+
+      // Convert response stream to a downloadable Blob
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Meta_Ads_Report_${selectedClient}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Something went wrong while generating the PDF.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl space-y-8 pb-12">
-      {/* Header section with connection triggers */}
       <div className="flex justify-between items-start border-b border-slate-200 pb-6">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900">Client Configuration</h2>
-          <p className="text-slate-500 mt-1">Select metrics and preview live connected ad channels.</p>
+          <h2 className="text-2xl font-bold text-slate-900">Reporting Configuration</h2>
+          <p className="text-slate-500 mt-1">Connect ad channels to preview live metrics.</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -40,7 +61,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Conditionally expand the graphical view when toggled */}
       {showCharts && (
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 shadow-sm">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">Meta Ads Visual Performance Payload</h3>
@@ -48,16 +68,15 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Existing Metric Toggles */}
       <MetricToggles />
 
-      {/* Footer Generation Action */}
       <div className="flex justify-end border-t border-slate-200 pt-6">
         <button
           onClick={handleGenerate}
-          className="bg-indigo-600 text-white px-6 py-3 rounded-md font-medium hover:bg-indigo-700 transition shadow"
+          disabled={isGenerating}
+          className="bg-indigo-600 text-white px-6 py-3 rounded-md font-medium hover:bg-indigo-700 transition shadow disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Generate Monthly Report
+          {isGenerating ? "Generating Report..." : "Generate Monthly Report"}
         </button>
       </div>
     </div>

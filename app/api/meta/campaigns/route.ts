@@ -2,27 +2,39 @@ import { Nango } from '@nangohq/node';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const clientId = searchParams.get('clientId');
+
+    if (!clientId) {
+        return NextResponse.json({ error: 'Missing clientId parameter' }, { status: 400 });
+    }
+
     const nango = new Nango({ secretKey: process.env.NANGO_SECRET_KEY! });
-    const connectionId = '78cec321-c908-4a72-b4c9-61467a27105d';
-    const adAccountId = 'act_2008620313135209#'; // Replace with a real Ad Account ID from your Business Portfolio
+    const adAccountId = 'act_2008620313135209';
 
     try {
         const response = await nango.get({
-            endpoint: `/v22.0/${adAccountId}/insights?fields=campaign_name,spend,impressions,cpm,actions&date_preset=last_30d`,
+            endpoint: `https://graph.facebook.com/v18.0/${adAccountId}/campaigns?fields=name,status,insights{spend,impressions,clicks,cpm,cpc,ctr,reach}`,
             providerConfigKey: 'facebook',
-            connectionId: connectionId,
+            connectionId: clientId,
         });
 
-        return NextResponse.json({ success: true, raw_meta_response: response.data });
+        const campaigns = response.data?.data || [];
+        return NextResponse.json({ success: true, campaigns });
     } catch (error: any) {
-        console.error('Meta API error:', error?.response?.data || error.message);
-        // This will now print the exact Meta/Nango error to your screen
+        const errorMessage = error?.response?.data?.error?.message || error.message || '';
+
+        // ✨ NEW: Catching Nango's exact "Failed to get connection" wording
+        const isNotConnected = errorMessage.includes('Connection not found') ||
+            errorMessage.includes('Failed to get connection') ||
+            error.response?.status === 404;
+
         return NextResponse.json(
             {
                 success: false,
-                error: error?.response?.data || error.message || 'Unknown error occurred'
+                error: isNotConnected ? 'not_connected' : errorMessage
             },
-            { status: 500 }
+            { status: isNotConnected ? 404 : 500 }
         );
     }
 }

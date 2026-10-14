@@ -1,19 +1,27 @@
 import { create } from 'zustand';
 
 interface ReportState {
-    selectedClient: string | null;
+    selectedClient: string; // Removed the | null
     activeMetrics: Record<string, boolean>;
     setClient: (clientId: string) => void;
     toggleMetric: (metricId: string) => void;
 }
 
 export const useReportStore = create<ReportState>((set) => ({
-    selectedClient: null,
+    // Initialize with a default ID so the dashboard is instantly active
+    selectedClient: 'primary-user',
     activeMetrics: {
+        spend: true,
+        impressions: true,
+        cpm: true,
+        cpc:true,
+        ctr: true,
+        reach: false,
         totalSpend: true,
         cpa: true,
         roas: true,
-        clicks: false, // Defaulting secondary metrics to false
+        clicks: false,
+        frequency: false,
     },
     setClient: (clientId) => set({ selectedClient: clientId }),
     toggleMetric: (metricId) =>

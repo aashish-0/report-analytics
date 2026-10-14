@@ -4,7 +4,7 @@ import { useReportStore } from "@/store/useReportStore";
 // Mock data until we query the Neon DB
 const MOCK_CLIENTS = [
   { id: "1", name: "Acme Dental" },
-  { id: "2", name: "Summit Real Estate" },
+  // { id: "2", name: "Summit Real Estate" },
 ];
 
 export function ClientSidebar() {
