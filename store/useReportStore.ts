@@ -9,7 +9,7 @@ interface ReportState {
 
 export const useReportStore = create<ReportState>((set) => ({
     // Initialize with a default ID so the dashboard is instantly active
-    selectedClient: 'primary-user',
+    selectedClient: '',
     activeMetrics: {
         spend: true,
         impressions: true,

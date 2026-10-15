@@ -1,26 +1,38 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
-import { clients } from '@/lib/schema'; // We still need to generate this schema
-import { eq } from 'drizzle-orm';
+import { clientConnections } from '@/lib/schema';
+import { nango, getOwnedClient } from '@/lib/nango';
 
+// Called by the frontend right after nango.auth() succeeds.
+// The webhook stays the source of truth; this closes the race / local-dev gap.
 export async function POST(request: Request) {
   try {
-    const payload = await request.json();
+    const { integrationId, clientId, connectionId } = await request.json();
 
-    // Nango fires a specific event upon a successful OAuth connection
-    if (payload.operation === 'creation' && payload.provider === 'meta-ads') {
-      const internalClientId = payload.connectionId; 
-      
-      // Update our database to unlock the Meta Ads metrics for this client
-      await db.update(clients)
-        .set({ metaAdsConnected: true })
-        .where(eq(clients.id, internalClientId));
+    const authSession = await auth.api.getSession({ headers: request.headers });
+    if (!authSession) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-      return NextResponse.json({ status: 'success' }, { status: 200 });
+    const client = await getOwnedClient(clientId, authSession.user.id);
+    if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Confirm the connection really exists in Nango and belongs to this client
+    const conn: any = await nango.getConnection(integrationId, connectionId);
+    const owner = conn?.end_user?.id ?? conn?.endUser?.endUserId;
+    if (owner && owner !== clientId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    return NextResponse.json({ status: 'ignored' }, { status: 200 });
-  } catch (error) {
-    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
+    await db.insert(clientConnections)
+      .values({ clientId, integrationId, connectionId })
+      .onConflictDoUpdate({
+        target: [clientConnections.clientId, clientConnections.integrationId],
+        set: { connectionId },
+      });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Save connection error:', error.response?.data || error.message);
+    return NextResponse.json({ success: false }, { status: 500 });
   }
 }
