@@ -1,61 +1,31 @@
 "use client";
-import { useState } from 'react';
-import Nango from '@nangohq/frontend';
 import { useReportStore } from "@/store/useReportStore";
+import { useIntegrationConnect } from "@/hooks/UseIntegrationConnect";
 
 export function ConnectMetaAdsButton() {
-  // ✨ NEW: Destructure setClient so we can update the active ID
-  const { selectedClient, setClient } = useReportStore();
-  const [isConnected, setIsConnected] = useState(false);
+  const { selectedClient } = useReportStore(); // the app's client id, never Nango's connectionId
+  const { status, error, connect } = useIntegrationConnect(selectedClient, "facebook");
 
-  const handleConnect = async () => {
-    try {
-      const res = await fetch('/api/nango/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          integrationId: 'facebook',
-          endUserId: selectedClient
-        })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(JSON.stringify(data.error));
-      }
-
-      const nango = new Nango({ connectSessionToken: data.token });
-
-      // Open the popup and wait for the user to log in
-      const result = await nango.auth('facebook');
-
-      console.log("Successfully connected Meta Ads:", result.connectionId);
-
-      // ✨ NEW: Update your app to use Nango's real connection ID instead of "primary-user"
-      if (result.connectionId) {
-        setClient(result.connectionId);
-      }
-
-      setIsConnected(true);
-      window.dispatchEvent(new Event('refreshMetaAds'));
-
-    } catch (error) {
-      console.error("Nango connection failed", error);
-      alert("Failed to connect Meta account.");
-    }
-  };
+  const connected = status === "connected";
+  const busy = status === "checking" || status === "connecting";
 
   return (
-    <button
-      onClick={handleConnect}
-      disabled={isConnected}
-      className={`${isConnected
-          ? "bg-green-600 hover:bg-green-700"
-          : "bg-blue-600 hover:bg-blue-700"
-        } text-white font-medium px-4 py-2 rounded-md transition disabled:opacity-80`}
-    >
-      {isConnected ? "Meta Ads Connected ✓" : "Connect Meta Ads"}
-    </button>
+    <div className="flex flex-col items-end">
+      <button
+        onClick={connect}
+        disabled={!selectedClient || connected || busy}
+        className={`${connected ? "bg-green-600" : "bg-blue-600 hover:bg-blue-700"
+          } text-white font-medium px-4 py-2 rounded-md transition disabled:opacity-70`}
+      >
+        {connected
+          ? "Meta Ads Connected ✓"
+          : status === "connecting"
+            ? "Connecting..."
+            : status === "checking"
+              ? "Checking..."
+              : "Connect Meta Ads"}
+      </button>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
   );
 }

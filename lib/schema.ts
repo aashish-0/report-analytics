@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { uniqueIndex } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -55,10 +56,20 @@ export const clients = pgTable("clients", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const clientConnections = pgTable("client_connections", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  clientId: text("clientId").notNull().references(() => clients.id),
+  integrationId: text("integrationId").notNull(), // e.g. "facebook", "google-analytics"
+  connectionId: text("connectionId").notNull(),   // Nango's connection id
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (t) => ({
+  uniq: uniqueIndex("client_integration_uniq").on(t.clientId, t.integrationId),
+}));
+
 export const reportTemplates = pgTable("report_templates", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text("userId").notNull().references(() => user.id),
-  clientId: text("clientId").notNull().unique(), 
+  clientId: text("clientId").notNull().unique(),
   metrics: jsonb("metrics").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull()

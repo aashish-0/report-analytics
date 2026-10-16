@@ -1,34 +1,34 @@
 import { NextResponse } from 'next/server';
-import { Nango } from '@nangohq/node';
+import { auth } from '@/lib/auth';
+import { nango, getOwnedClient, isAllowedIntegration } from '@/lib/nango';
 
+/**
+ * POST /api/nango/session
+ * Single purpose: issue a short-lived Nango Connect session token for a client.
+ * It does NOT check or save connections (see /api/nango/connection) and it is
+ * only called when the user actually clicks "Connect" and no connection exists.
+ */
 export async function POST(request: Request) {
     try {
-        const { integrationId, endUserId } = await request.json();
+        const { clientId, integrationId } = await request.json();
+        if (!clientId || !isAllowedIntegration(integrationId)) {
+            return NextResponse.json({ success: false, error: 'Invalid request' }, { status: 400 });
+        }
 
-        const nango = new Nango({ secretKey: process.env.NANGO_SECRET_KEY! });
+        const authSession = await auth.api.getSession({ headers: request.headers });
+        if (!authSession) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-        // Strictly match Nango's v2 Connect Session schema
-        const sessionPayload: any = {
-            end_user: {
-                id: endUserId // Nango automatically uses this ("primary-user") as the connection_id
-            },
-            allowed_integrations: [integrationId] // Just the string, e.g., ["facebook"]
-        };
+        const client = await getOwnedClient(clientId, authSession.user.id);
+        if (!client) return NextResponse.json({ success: false, error: 'Client not found' }, { status: 404 });
 
-        const sessionResponse = await nango.createConnectSession(sessionPayload);
+        const session = await nango.createConnectSession({
+            end_user: { id: clientId },
+            allowed_integrations: [integrationId],
+        });
 
-        // Extract the token exactly where TypeScript says it is
-        const token = sessionResponse.data.token;
-
-        return NextResponse.json({ success: true, token });
-
+        return NextResponse.json({ success: true, token: session.data.token });
     } catch (error: any) {
-        const errorData = error.response?.data || error.message || error;
-        console.error("Session API Error Details:", JSON.stringify(errorData, null, 2));
-
-        return NextResponse.json(
-            { success: false, error: errorData },
-            { status: 500 }
-        );
+        console.error('Connect session error:', error?.response?.data || error?.message || error);
+        return NextResponse.json({ success: false, error: 'Failed to create connect session' }, { status: 500 });
     }
 }
