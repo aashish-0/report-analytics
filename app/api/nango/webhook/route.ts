@@ -1,38 +1,28 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { clientConnections } from '@/lib/schema';
-import { nango, getOwnedClient } from '@/lib/nango';
+import { saveConnection, isAllowedIntegration } from '@/lib/nango';
 
-// Called by the frontend right after nango.auth() succeeds.
-// The webhook stays the source of truth; this closes the race / local-dev gap.
+/**
+ * POST /api/nango/webhook
+ * Receives Nango webhooks (set this URL in Nango -> Environment Settings -> Webhooks).
+ * Locally it needs a public tunnel (ngrok / cloudflared).
+ */
 export async function POST(request: Request) {
   try {
-    const { integrationId, clientId, connectionId } = await request.json();
+    const payload = await request.json();
 
-    const authSession = await auth.api.getSession({ headers: request.headers });
-    if (!authSession) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (payload.type === 'auth' && payload.operation === 'creation' && payload.success) {
+      const clientId = payload.endUser?.endUserId;
+      const integrationId = payload.providerConfigKey;
+      const connectionId = payload.connectionId;
 
-    const client = await getOwnedClient(clientId, authSession.user.id);
-    if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    // Confirm the connection really exists in Nango and belongs to this client
-    const conn: any = await nango.getConnection(integrationId, connectionId);
-    const owner = conn?.end_user?.id ?? conn?.endUser?.endUserId;
-    if (owner && owner !== clientId) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      if (clientId && connectionId && isAllowedIntegration(integrationId)) {
+        await saveConnection(clientId, integrationId, connectionId);
+      }
     }
 
-    await db.insert(clientConnections)
-      .values({ clientId, integrationId, connectionId })
-      .onConflictDoUpdate({
-        target: [clientConnections.clientId, clientConnections.integrationId],
-        set: { connectionId },
-      });
-
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    console.error('Save connection error:', error.response?.data || error.message);
-    return NextResponse.json({ success: false }, { status: 500 });
+    return NextResponse.json({ status: 'ok' });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    return NextResponse.json({ error: 'Webhook failed' }, { status: 500 });
   }
 }

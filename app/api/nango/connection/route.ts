@@ -1,48 +1,72 @@
 import { NextResponse } from 'next/server';
-import { Nango } from '@nangohq/node';
-import { and, eq } from 'drizzle-orm';
-import { db } from '@/lib/db';
-import { clients, clientConnections } from '@/lib/schema';
 import { auth } from '@/lib/auth';
+import {
+    nango,
+    getOwnedClient,
+    isAllowedIntegration,
+    resolveConnection,
+    saveConnection,
+} from '@/lib/nango';
 
-const nango = new Nango({ secretKey: process.env.NANGO_SECRET_KEY! });
-
-export async function POST(request: Request) {
-    const { clientId, propertyId, reportRequest } = await request.json();
-
-    const authSession = await auth.api.getSession({ headers: request.headers });
-    if (!authSession) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    // ownership check
-    const [client] = await db.select().from(clients)
-        .where(and(eq(clients.id, clientId), eq(clients.userId, authSession.user.id)))
-        .limit(1);
-    if (!client) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    const [conn] = await db.select().from(clientConnections)
-        .where(and(
-            eq(clientConnections.clientId, clientId),
-            eq(clientConnections.integrationId, 'google-analytics'),
-        ))
-        .limit(1);
-    if (!conn) return NextResponse.json({ error: 'not_connected' }, { status: 400 });
-
+/**
+ * GET /api/nango/connection?clientId=...&integrationId=...
+ * Is there already a usable connection for this client + integration?
+ */
+export async function GET(request: Request) {
     try {
-        const res = await nango.proxy({
-            providerConfigKey: 'google-analytics',
-            connectionId: conn.connectionId,
-            method: 'POST',
-            endpoint: `/v1beta/properties/${propertyId}:runReport`,
-            data: reportRequest,
-        });
-        return NextResponse.json({ success: true, data: res.data });
-    } catch (error: any) {
-        const status = error.response?.status;
-        if (status === 401 || status === 403) {
-            // tells the frontend to trigger a reconnect
-            return NextResponse.json({ error: 'needs_reconnect' }, { status: 401 });
+        const { searchParams } = new URL(request.url);
+        const clientId = searchParams.get('clientId');
+        const integrationId = searchParams.get('integrationId');
+        if (!clientId || !isAllowedIntegration(integrationId)) {
+            return NextResponse.json({ success: false, error: 'Invalid request' }, { status: 400 });
         }
-        console.error(error.response?.data || error.message);
-        return NextResponse.json({ error: 'fetch_failed' }, { status: 500 });
+
+        const authSession = await auth.api.getSession({ headers: request.headers });
+        if (!authSession) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+        const client = await getOwnedClient(clientId, authSession.user.id);
+        if (!client) return NextResponse.json({ success: false, error: 'Client not found' }, { status: 404 });
+
+        const { connected } = await resolveConnection(clientId, integrationId);
+        return NextResponse.json({ success: true, connected });
+    } catch (error: any) {
+        console.error('Connection status error:', error?.message || error);
+        return NextResponse.json({ success: false, error: 'Failed to check connection' }, { status: 500 });
+    }
+}
+
+/**
+ * POST /api/nango/connection
+ * Persist the connection right after the Connect UI reports success.
+ * (The Nango webhook does the same; both are idempotent upserts.)
+ */
+export async function POST(request: Request) {
+    try {
+        const { clientId, integrationId, connectionId } = await request.json();
+        if (!clientId || !connectionId || !isAllowedIntegration(integrationId)) {
+            return NextResponse.json({ success: false, error: 'Invalid request' }, { status: 400 });
+        }
+
+        const authSession = await auth.api.getSession({ headers: request.headers });
+        if (!authSession) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+        const client = await getOwnedClient(clientId, authSession.user.id);
+        if (!client) return NextResponse.json({ success: false, error: 'Client not found' }, { status: 404 });
+
+        // Reject only if Nango definitively says this connection doesn't exist
+        try {
+            await nango.getConnection(integrationId, connectionId);
+        } catch (err: any) {
+            if (err?.response?.status === 404) {
+                return NextResponse.json({ success: false, error: 'Connection not found' }, { status: 400 });
+            }
+            console.warn('getConnection verification skipped:', err?.response?.status, err?.message);
+        }
+
+        await saveConnection(clientId, integrationId, connectionId);
+        return NextResponse.json({ success: true });
+    } catch (error: any) {
+        console.error('Save connection error:', error?.cause || error?.message || error);
+        return NextResponse.json({ success: false, error: 'Failed to save connection' }, { status: 500 });
     }
 }
